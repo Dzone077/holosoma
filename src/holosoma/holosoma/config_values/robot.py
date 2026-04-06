@@ -882,22 +882,23 @@ t1_29dof_waist_wrist = RobotConfig(
     terminate_after_contacts_on=["Waist", "Shoulder", "Hip", "Trunk", "Head"],
     penalize_contacts_on=["Trunk", "H1", "H2", "AL", "AR", "Waist", "Hip", "Shank", "Ankle"],
     init_state=RobotInitState(
-        pos=[0.0, 0.0, 0.68],  # x,y,z [m]
+        pos=[0.0, 0.0, 0.72],  # Updated to match MuJoCo T1.yaml (was 0.68)
         rot=[0.0, 0.0, 0.0, 1.0],  # x,y,z,w [quat]
         lin_vel=[0.0, 0.0, 0.0],  # x,y,z [m/s]
         ang_vel=[0.0, 0.0, 0.0],  # x,y,z [rad/s]
+        # UPDATED: Match MuJoCo T1.yaml default_joint_angles for policy transfer
         default_joint_angles={
             "AAHead_yaw": 0.0,
             "Head_pitch": 0.0,
-            "Left_Shoulder_Pitch": 0.2,
-            "Left_Shoulder_Roll": -1.35,
+            "Left_Shoulder_Pitch": 0.0,    # Was 0.2, now matches MuJoCo
+            "Left_Shoulder_Roll": -1.25,   # Was -1.35, now matches MuJoCo
             "Left_Elbow_Pitch": 0.0,
             "Left_Elbow_Yaw": -0.5,
             "Left_Wrist_Pitch": 0.0,
             "Left_Wrist_Yaw": 0.0,
             "Left_Hand_Roll": 0.0,
-            "Right_Shoulder_Pitch": 0.2,
-            "Right_Shoulder_Roll": 1.35,
+            "Right_Shoulder_Pitch": 0.0,   # Was 0.2, now matches MuJoCo
+            "Right_Shoulder_Roll": 1.25,   # Was 1.35, now matches MuJoCo
             "Right_Elbow_Pitch": 0.0,
             "Right_Elbow_Yaw": 0.5,
             "Right_Wrist_Pitch": 0.0,
@@ -1023,16 +1024,17 @@ t1_29dof_waist_wrist = RobotConfig(
     contact_pairs_multiplier=16,
     control=RobotControlConfig(
         control_type="P",
+        # UPDATED: Match MuJoCo T1.yaml stiffness/damping for policy transfer
         stiffness={
             "Head_yaw": 5,
             "Head_pitch": 5,
-            "Hip_Yaw": 200,
-            "Hip_Roll": 200,
-            "Hip_Pitch": 200,
-            "Knee": 200,
-            "Ankle_Pitch": 50,
-            "Ankle_Roll": 50,
-            "Waist": 200,
+            "Hip_Yaw": 50,      # Was 200, now matches MuJoCo
+            "Hip_Roll": 50,     # Was 200, now matches MuJoCo
+            "Hip_Pitch": 50,    # Was 200, now matches MuJoCo
+            "Knee": 50,         # Was 200, now matches MuJoCo
+            "Ankle_Pitch": 30,  # Was 50, now matches MuJoCo
+            "Ankle_Roll": 30,   # Was 50, now matches MuJoCo
+            "Waist": 50,        # Was 200, adjusted to match leg stiffness
             "Shoulder_Pitch": 20,
             "Shoulder_Roll": 20,
             "Elbow_Pitch": 20,
@@ -1044,20 +1046,20 @@ t1_29dof_waist_wrist = RobotConfig(
         damping={
             "Head_yaw": 0.5,
             "Head_pitch": 0.5,
-            "Hip_Yaw": 5,
-            "Hip_Roll": 5,
-            "Hip_Pitch": 5,
-            "Knee": 5,
-            "Ankle_Pitch": 3,
-            "Ankle_Roll": 3,
-            "Waist": 5,
-            "Shoulder_Pitch": 0.5,
-            "Shoulder_Roll": 0.5,
-            "Elbow_Pitch": 0.5,
-            "Elbow_Yaw": 0.5,
-            "Wrist_Pitch": 0.5,
-            "Wrist_Yaw": 0.5,
-            "Hand_Roll": 0.5,
+            "Hip_Yaw": 3,       # Was 5, now matches MuJoCo
+            "Hip_Roll": 3,      # Was 5, now matches MuJoCo
+            "Hip_Pitch": 3,     # Was 5, now matches MuJoCo
+            "Knee": 3,          # Was 5, now matches MuJoCo
+            "Ankle_Pitch": 1,   # Was 3, now matches MuJoCo
+            "Ankle_Roll": 1,    # Was 3, now matches MuJoCo
+            "Waist": 3,         # Was 5, adjusted
+            "Shoulder_Pitch": 2,  # Was 0.5, now matches MuJoCo
+            "Shoulder_Roll": 2,   # Was 0.5, now matches MuJoCo
+            "Elbow_Pitch": 2,     # Was 0.5, now matches MuJoCo
+            "Elbow_Yaw": 2,       # Was 0.5, now matches MuJoCo
+            "Wrist_Pitch": 2,     # Was 0.5, adjusted
+            "Wrist_Yaw": 2,       # Was 0.5, adjusted
+            "Hand_Roll": 2,       # Was 0.5, adjusted
         },
         action_scale=0.25,
         action_clip_value=100.0,

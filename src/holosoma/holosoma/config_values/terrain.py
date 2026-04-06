@@ -48,6 +48,40 @@ terrain_locomotion_mix = TerrainManagerCfg(
     )
 )
 
+
+terrain_locomotion_isaaclab_rough = TerrainManagerCfg(
+    terrain_term=TerrainTermCfg(
+        func="holosoma.managers.terrain.terms.locomotion:TerrainLocomotion",
+        mesh_type=MeshType.TRIMESH,
+        # Match IsaacLab ROUGH_TERRAINS_CFG global settings.
+        horizontal_scale=0.1,
+        vertical_scale=0.005,
+        border_size=20,
+        static_friction=1.0,
+        dynamic_friction=1.0,
+        restitution=0.0,
+        terrain_length=8.0,
+        terrain_width=8.0,
+        num_rows=5,
+        num_cols=5,
+        max_slope=0.4,
+        platform_size=3.0,
+        step_width_range=[0.30, 0.30],
+        amplitude_range=[0.02, 0.10],
+        slope_treshold=0.75,
+        # Match IsaacLab rough.py terrain names and proportions.
+        terrain_config={
+            "pyramid_stairs": 0.1,
+            "pyramid_stairs_inv": 0.1,
+            "boxes": 0.2,
+            "random_rough": 0.2,
+            "hf_pyramid_slope": 0.1,
+            "hf_pyramid_slope_inv": 0.1,
+            "flat": 0.2,
+        },
+    )
+)
+
 terrain_load_obj = TerrainManagerCfg(
     terrain_term=TerrainTermCfg(
         static_friction=1.0,
@@ -62,5 +96,6 @@ terrain_load_obj = TerrainManagerCfg(
 DEFAULTS = {
     "terrain_locomotion_plane": terrain_locomotion_plane,
     "terrain_locomotion_mix": terrain_locomotion_mix,
+    "terrain_locomotion_isaaclab_rough": terrain_locomotion_isaaclab_rough,
     "terrain_load_obj": terrain_load_obj,
 }

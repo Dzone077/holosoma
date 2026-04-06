@@ -229,9 +229,16 @@ def base_height(
     Returns:
         Reward tensor [num_envs]
     """
-    base_height_penalty = torch.square(
-        env.terrain_manager.get_state("locomotion_terrain").base_heights - desired_base_height
-    )
+    # Get base heights from terrain manager
+    base_heights = env.terrain_manager.get_state("locomotion_terrain").base_heights
+
+    # Fallback: if base_heights is NaN (terrain not initialized), use absolute robot Z position
+    # This ensures the robot still gets feedback about maintaining height
+    if torch.isnan(base_heights).any():
+        # Use the robot's base Z position directly (on flat terrain, this is approximately the height)
+        base_heights = env.simulator.robot_root_states[:, 2]
+
+    base_height_penalty = torch.square(base_heights - desired_base_height)
 
     # Apply stronger penalty for zero velocity commands if configured
     if zero_vel_penalty_scale != 1.0:
@@ -390,3 +397,193 @@ def alive(env) -> torch.Tensor:
         Reward tensor [num_envs]
     """
     return torch.ones(env.num_envs, dtype=torch.float, device=env.device)
+
+
+# ================================================================================================
+# FastTD3/MuJoCo Playground Compatible Rewards
+# ================================================================================================
+
+
+def penalty_torques(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize total squared torques.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    # Get applied torques from action manager
+    torques = env.action_manager.applied_torques
+    return torch.sum(torch.square(torques), dim=1)
+
+
+def penalty_energy(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize positive mechanical power (torque * velocity when positive).
+
+    This is effectively energy consumption penalty.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    torques = env.action_manager.applied_torques
+    dof_vel = env.simulator.dof_vel
+    power = torques * dof_vel
+    positive_power = torch.where(power > 0, power, torch.zeros_like(power))
+    return torch.sum(positive_power, dim=1)
+
+
+def penalty_torque_tiredness(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize torques relative to their limits.
+
+    sum((torque / torque_limit)^2), clamped to 1.0 max ratio.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    torques = env.action_manager.applied_torques
+    torque_limits = env.torque_limits
+
+    # Compute ratio and clamp
+    ratio = torch.abs(torques) / (torque_limits + 1e-6)
+    ratio = torch.clamp(ratio, max=1.0)
+
+    return torch.sum(torch.square(ratio), dim=1)
+
+
+def penalty_lin_vel_z(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize vertical (z-axis) linear velocity.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    lin_vel = get_base_lin_vel(env)
+    return torch.square(lin_vel[:, 2])
+
+
+def penalty_dof_vel(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize total joint velocity magnitude.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    dof_vel = env.simulator.dof_vel
+    return torch.sum(torch.square(dof_vel), dim=1)
+
+
+def penalty_dof_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize joint accelerations.
+
+    Uses finite differences from last velocity.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    dof_vel = env.simulator.dof_vel
+    last_dof_vel = env.simulator.last_dof_vel
+
+    # Get dt from simulator
+    if hasattr(env.simulator, "config") and hasattr(env.simulator.config, "sim"):
+        dt = 1.0 / env.simulator.config.sim.fps * env.simulator.config.sim.control_decimation
+    else:
+        dt = 0.02  # Default control dt
+
+    dof_acc = (dof_vel - last_dof_vel) / dt
+    return torch.sum(torch.square(dof_acc), dim=1)
+
+
+def penalty_root_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize root link acceleration.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    # Get linear and angular acceleration
+    lin_vel = env.simulator._robot.data.root_lin_vel_w
+    ang_vel = env.simulator._robot.data.root_ang_vel_w
+
+    # Use last velocities if available
+    if hasattr(env.simulator, "last_root_lin_vel"):
+        last_lin_vel = env.simulator.last_root_lin_vel
+        last_ang_vel = env.simulator.last_root_ang_vel
+    else:
+        # First step, no penalty
+        return torch.zeros(env.num_envs, device=env.device)
+
+    if hasattr(env.simulator, "config") and hasattr(env.simulator.config, "sim"):
+        dt = 1.0 / env.simulator.config.sim.fps * env.simulator.config.sim.control_decimation
+    else:
+        dt = 0.02
+
+    lin_acc = (lin_vel - last_lin_vel) / dt
+    ang_acc = (ang_vel - last_ang_vel) / dt
+
+    return torch.sum(torch.square(lin_acc), dim=1) + torch.sum(torch.square(ang_acc), dim=1)
+
+
+def penalty_feet_slip(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize feet slipping (velocity while in contact).
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    # Get foot velocities (use _rigid_body_vel which is the linear velocity)
+    left_foot_vel = env.simulator._rigid_body_vel[:, env.feet_indices[0], :2]
+    right_foot_vel = env.simulator._rigid_body_vel[:, env.feet_indices[1], :2]
+
+    # Get contact status
+    contact_left = env.simulator.contact_forces[:, env.feet_indices[0], 2] > 1.0
+    contact_right = env.simulator.contact_forces[:, env.feet_indices[1], 2] > 1.0
+
+    # Compute slip penalty
+    left_slip = torch.sum(torch.square(left_foot_vel), dim=1) * contact_left.float()
+    right_slip = torch.sum(torch.square(right_foot_vel), dim=1) * contact_right.float()
+
+    return left_slip + right_slip
+
+
+def penalty_feet_roll(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize feet roll angle deviation from flat.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    # Get foot orientations and compute roll from gravity projection
+    left_quat = env.simulator._rigid_body_rot[:, env.feet_indices[0]]
+    right_quat = env.simulator._rigid_body_rot[:, env.feet_indices[1]]
+
+    # Project gravity into foot frames
+    gravity = gravity_vector(env)
+    left_gravity = quat_rotate_inverse(left_quat, gravity, w_last=True)
+    right_gravity = quat_rotate_inverse(right_quat, gravity, w_last=True)
+
+    # Roll is deviation from purely vertical gravity (z=-1)
+    # When flat, gravity should be [0, 0, -1] in foot frame
+    left_roll = torch.atan2(left_gravity[:, 1], -left_gravity[:, 2])
+    right_roll = torch.atan2(right_gravity[:, 1], -right_gravity[:, 2])
+
+    return torch.square(left_roll) + torch.square(right_roll)

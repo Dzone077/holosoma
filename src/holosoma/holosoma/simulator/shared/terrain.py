@@ -408,6 +408,72 @@ class Terrain(TerrainInterface):
             terrain, min_height=-amplitude, max_height=amplitude, step=terrain.vertical_scale, downsampled_scale=0.2
         )
 
+    # IsaacLab rough.py-compatible terrain names.
+    def _pyramid_stairs_terrain_func(self, terrain: Any, difficulty: float) -> None:
+        """IsaacLab-compatible pyramid stairs terrain (non-inverted)."""
+        step_width = 0.3
+        step_height = 0.05 + (0.23 - 0.05) * difficulty
+        terrain_utils.pyramid_stairs_terrain(
+            terrain, step_width=step_width, step_height=step_height, platform_size=3.0
+        )
+
+    def _pyramid_stairs_inv_terrain_func(self, terrain: Any, difficulty: float) -> None:
+        """IsaacLab-compatible inverted pyramid stairs terrain."""
+        step_width = 0.3
+        step_height = -(0.05 + (0.23 - 0.05) * difficulty)
+        terrain_utils.pyramid_stairs_terrain(
+            terrain, step_width=step_width, step_height=step_height, platform_size=3.0
+        )
+
+    def _random_rough_terrain_func(self, terrain: Any, difficulty: float) -> None:
+        """IsaacLab-compatible random rough terrain."""
+        max_noise = 0.02 + (0.10 - 0.02) * difficulty
+        terrain_utils.random_uniform_terrain(
+            terrain,
+            min_height=-max_noise,
+            max_height=max_noise,
+            step=0.02,
+            downsampled_scale=0.2,
+        )
+
+    def _hf_pyramid_slope_terrain_func(self, terrain: Any, difficulty: float) -> None:
+        """IsaacLab-compatible heightfield pyramid slope terrain."""
+        slope = 0.4 * difficulty
+        terrain_utils.pyramid_sloped_terrain(terrain, slope=slope, platform_size=2.0)
+
+    def _hf_pyramid_slope_inv_terrain_func(self, terrain: Any, difficulty: float) -> None:
+        """IsaacLab-compatible heightfield inverted pyramid slope terrain."""
+        slope = -0.4 * difficulty
+        terrain_utils.pyramid_sloped_terrain(terrain, slope=slope, platform_size=2.0)
+
+    def _boxes_terrain_func(self, terrain: Any, difficulty: float) -> None:
+        """Approximate IsaacLab random-grid boxes terrain with a central platform."""
+        grid_width_px = max(1, int(0.45 / terrain.horizontal_scale))
+        max_height = 0.05 + (0.20 - 0.05) * difficulty
+        max_height_px = max(1, int(max_height / terrain.vertical_scale))
+        platform_half_px = max(1, int((2.0 / terrain.horizontal_scale) / 2))
+
+        width_px = terrain.width
+        length_px = terrain.length
+        cx = width_px // 2
+        cy = length_px // 2
+
+        terrain.height_field_raw[:] = 0
+
+        for x in range(0, width_px, grid_width_px):
+            for y in range(0, length_px, grid_width_px):
+                x2 = min(width_px, x + grid_width_px)
+                y2 = min(length_px, y + grid_width_px)
+
+                # Keep central flat platform clear for spawning.
+                if (x < cx + platform_half_px and x2 > cx - platform_half_px) and (
+                    y < cy + platform_half_px and y2 > cy - platform_half_px
+                ):
+                    continue
+
+                h = np.random.randint(0, max_height_px + 1)
+                terrain.height_field_raw[x:x2, y:y2] = h
+
     def _slope_terrain_func(self, terrain: Any, difficulty: float) -> None:
         """Generate a linear slope terrain with peak in the middle.
 

@@ -106,6 +106,8 @@ def run_policy(config: InferenceConfig):
 
         logger.info("✅ Policy initialized successfully!")
         _print_control_guide(policy_class, config.task.use_joystick)
+        if isinstance(policy, LocomotionPolicy):
+            policy.start_command_server()
         policy.run()
         logger.info("✅ Policy execution completed!")
 

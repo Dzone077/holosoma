@@ -151,6 +151,26 @@ class ActionManager:
         """Dimensions of each action term."""
         return self._term_dims
 
+    @property
+    def applied_torques(self) -> torch.Tensor:
+        """Get applied torques from the action term.
+
+        Returns the torques computed by the joint control action term.
+        If no joint control term exists, returns zeros.
+
+        Returns
+        -------
+        torch.Tensor
+            Applied torques tensor [num_envs, num_dof]
+        """
+        # Try to get torques from the joint control action term
+        for term_name, term_instance in self._term_instances.items():
+            if hasattr(term_instance, "torques"):
+                return term_instance.torques
+
+        # Fallback: return zeros if no torque-producing term found
+        return torch.zeros((self.env.num_envs, self.env.num_dof), device=self.device)
+
     def process_actions(self, actions: torch.Tensor) -> None:
         """Process raw actions by distributing them to action terms.
 

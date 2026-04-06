@@ -26,6 +26,7 @@ from isaaclab.sensors import ContactSensor, ContactSensorCfg, RayCaster, RayCast
 from isaaclab.sim import PhysxCfg, SimulationCfg, SimulationContext
 from isaaclab.terrains import TerrainGeneratorCfg, TerrainImporterCfg
 from isaaclab.terrains.utils import create_prim_from_mesh
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.timer import Timer
 from loguru import logger
 from omegaconf import DictConfig
@@ -345,6 +346,11 @@ class IsaacSim(BaseSimulator):
                     dynamic_friction=terrain_state.dynamic_friction,
                     restitution=0.0,
                 ),
+                visual_material=sim_utils.MdlFileCfg(
+                    mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
+                    project_uvw=True,
+                    texture_scale=(0.25, 0.25),
+                ),
                 debug_vis=False,
             )
             terrain_config.num_envs = self.scene.cfg.num_envs
@@ -353,7 +359,12 @@ class IsaacSim(BaseSimulator):
             global_collision_prims.append(terrain_config.prim_path)
         elif terrain_state.mesh_type in ["trimesh", "load_obj"]:
             self.terrain = self.terrain_manager.get_state("locomotion_terrain").terrain
-            visual_material = sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 0.0))
+            # Use IsaacLab's marble tile material for realistic terrain appearance
+            visual_material = sim_utils.MdlFileCfg(
+                mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
+                project_uvw=True,
+                texture_scale=(0.25, 0.25),
+            )
             physics_material = sim_utils.RigidBodyMaterialCfg(
                 static_friction=terrain_state.static_friction,
                 dynamic_friction=terrain_state.dynamic_friction,
@@ -432,15 +443,14 @@ class IsaacSim(BaseSimulator):
             self._object = RigidObject(object_cfg)
             self.scene.rigid_objects[object_name] = self._object
 
-        # add lights
-        # light_config = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.98, 0.95, 0.88))
-        # light_config.func("/World/Light", light_config)
-
-        light_config1 = sim_utils.DomeLightCfg(
-            intensity=1000.0,
-            color=(0.98, 0.95, 0.88),
+        # Lighting with dome light - matches IsaacLab's H1 locomotion environment config
+        # Use IsaacLab's default clear sky HDR texture for the skybox
+        light_config = sim_utils.DomeLightCfg(
+            intensity=750.0,
+            color=(0.75, 0.75, 0.75),
+            texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
         )
-        light_config1.func("/World/DomeLight", light_config1, translation=(1, 0, 10))
+        light_config.func("/World/Light", light_config)
 
     def _get_base_body_name(self, preference_order: list[str]) -> str:
         """Get the base body name with fallback logic.

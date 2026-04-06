@@ -50,4 +50,17 @@ t1_29dof_curriculum_fast_sac = CurriculumManagerCfg(
     step_terms={},
 )
 
-__all__ = ["t1_29dof_curriculum", "t1_29dof_curriculum_fast_sac"]
+__all__ = ["t1_29dof_curriculum", "t1_29dof_curriculum_fast_sac", "t1_29dof_curriculum_fasttd3"]
+
+
+# Minimal curriculum for FastTD3 (no penalty scaling, just tracking)
+t1_29dof_curriculum_fasttd3 = CurriculumManagerCfg(
+    setup_terms={
+        "average_episode_tracker": CurriculumTermCfg(
+            func="holosoma.managers.curriculum.terms.locomotion:AverageEpisodeLengthTracker",
+            params={},
+        ),
+    },
+    reset_terms={},
+    step_terms={},
+)

@@ -1,3 +1,7 @@
+import json
+import socket
+import threading
+
 import numpy as np
 from termcolor import colored
 
@@ -112,6 +116,53 @@ class LocomotionPolicy(BasePolicy):
         self.lin_vel_command[0, 0] = 0.0
         self.lin_vel_command[0, 1] = 0.0
         self.logger.info(colored("Velocities set to zero", "blue"))
+
+    def start_command_server(self, host: str = "127.0.0.1", port: int = 7654):
+        """Start a UDP server in a background thread that accepts move commands.
+
+        Expected packet format (JSON): {"vx": 0.5, "vy": 0.0, "vyaw": 0.1}
+        """
+        self._cmd_server_running = True
+
+        def _serve():
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.bind((host, port))
+            sock.settimeout(1.0)
+            self.logger.info(f"Move command server listening on {host}:{port}")
+            while self._cmd_server_running:
+                try:
+                    data, _ = sock.recvfrom(256)
+                    cmd = json.loads(data.decode())
+                    self.move(float(cmd["vx"]), float(cmd["vy"]), float(cmd["vyaw"]))
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    self.logger.warning(f"Command server error: {e}")
+            sock.close()
+
+        self._cmd_thread = threading.Thread(target=_serve, daemon=True)
+        self._cmd_thread.start()
+
+    def stop_command_server(self):
+        """Stop the UDP command server."""
+        self._cmd_server_running = False
+
+    def move(self, vx: float, vy: float, vyaw: float):
+        """Set robot velocity commands from an external script.
+
+        Args:
+            vx: Linear velocity in x-direction (m/s).
+            vy: Linear velocity in y-direction (m/s).
+            vyaw: Angular velocity around z-axis (rad/s).
+        """
+        self.lin_vel_command[0, 0] = vx
+        self.lin_vel_command[0, 1] = vy
+        self.ang_vel_command[0, 0] = vyaw
+
+        # Ensure the robot is in walking mode when a velocity command is issued
+        if self.stand_command[0, 0] == 0:
+            self.stand_command[0, 0] = 1
+            self.base_height_command[0, 0] = self.desired_base_height
 
     def _print_control_status(self):
         """Print current control status."""

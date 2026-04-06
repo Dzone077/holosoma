@@ -24,6 +24,16 @@ logs_eval
 src/holosoma/holosoma/data/robots/converted/
 src/holosoma/holosoma/data/robots/converted_rank*/
 
+# Models and wandb
+models/
+wandb/
+src/holosoma/holosoma/wandb/
+
+# Temporary copy/backup files
+*copy*.py
+*copy*.xml
+*_old.py
+
 # other
 *.egg-info
 __pycache__

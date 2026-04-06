@@ -29,11 +29,43 @@
     <mesh name="AL1" file="AL1.STL"/>
     <mesh name="AL2" file="AL2.STL"/>
     <mesh name="AL3" file="AL3.STL"/>
+    <mesh file="AL4_collisions.obj" />
+    <mesh file="AL5_collisions.obj" />
+    <mesh file="AL6_collisions.obj" />
+    <mesh file="T1_L_hand_base_link_collisions.obj" />
+    <mesh file="L_index_proximal_collisions.obj"/>
+    <mesh file="L_index_distal_collisions.obj"/>
+    <mesh file="L_middle_proximal_collisions.obj"/>
+    <mesh file="L_middle_distal_collisions.obj"/>
+    <mesh file="L_pinky_proximal_collisions.obj"/>
+    <mesh file="L_pinky_distal_collisions.obj"/>
+    <mesh file="L_ring_proximal_collisions.obj"/>
+    <mesh file="L_ring_distal_collisions.obj"/>
+    <mesh file="L_thumb_proximal_base_collisions.obj"/>
+    <mesh file="L_thumb_proximal_collisions.obj"/>
+    <mesh file="L_thumb_intermediate_collisions.obj"/>
+    <mesh file="L_thumb_distal_collisions.obj"/>
     <mesh name="Ankle_Cross_Left" file="Ankle_Cross_Left.STL"/>
     <mesh name="Ankle_Cross_Right" file="Ankle_Cross_Right.STL"/>
     <mesh name="AR1" file="AR1.STL"/>
     <mesh name="AR2" file="AR2.STL"/>
     <mesh name="AR3" file="AR3.STL"/>
+    <mesh file="AR4_collisions.obj" />
+    <mesh file="AR5_collisions.obj" />
+    <mesh file="AR6_collisions.obj" />
+    <mesh file="T1_R_hand_base_link_collisions.obj" />
+    <mesh file="R_index_proximal_collisions.obj"/>
+    <mesh file="R_index_distal_collisions.obj"/>
+    <mesh file="R_middle_proximal_collisions.obj"/>
+    <mesh file="R_middle_distal_collisions.obj"/>
+    <mesh file="R_pinky_proximal_collisions.obj"/>
+    <mesh file="R_pinky_distal_collisions.obj"/>
+    <mesh file="R_ring_proximal_collisions.obj"/>
+    <mesh file="R_ring_distal_collisions.obj"/>
+    <mesh file="R_thumb_proximal_base_collisions.obj"/>
+    <mesh file="R_thumb_proximal_collisions.obj"/>
+    <mesh file="R_thumb_intermediate_collisions.obj"/>
+    <mesh file="R_thumb_distal_collisions.obj"/>
     <mesh name="H1" file="H1.STL"/>
     <mesh name="H2" file="H2.STL"/>
     <mesh name="Hip_Pitch_Left" file="Hip_Pitch_Left.STL"/>
@@ -109,24 +141,79 @@
             <joint name="Left_Elbow_Pitch" axis="0 1 0" range="-2.27 2.27" actuatorfrcrange="-18 18" class="arm_motor"/>
             <geom class="visual" mesh="AL3"/>
             <geom name="AL3" class="collision" type="mesh" mesh="AL3" contype="1" conaffinity="1"/>
-            <body name="left_hand_link" pos="0 0.1471 0">
-              <inertial pos="-0.000108 0.109573 0.000591" quat="0.707866 0.706347 -5.22939e-05 -0.000214913"
-                mass="0.327214" diaginertia="0.008159 0.00813104 0.000214962"/>
-              <joint name="Left_Elbow_Yaw" axis="0 0 1" range="-2.44 0" actuatorfrcrange="-18 18" class="arm_motor"/>
-              <geom class="visual" mesh="left_hand_link"/>
-              <geom name="left_hand_link" class="collision" type="mesh" mesh="left_hand_link" contype="1" conaffinity="1"/>
-              <body name="left_hand_sphere_link" pos="0.0 0.2 0.0" quat="1 0 0 0">
-                <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                <geom name="left_hand_sphere_link"
-                      type="sphere"
-                      size="0.005"
-                      pos="0.0 0.0 0.0"
-                      rgba="0.2 0.2 0.2 1"
-                      contype="1"
-                      conaffinity="1"
-                />
-              </body>
+            <body name="AL4" pos="0 0.1471 0">
+                <inertial pos="-0.000108 0.109573 0.000591" quat="0.707866 0.706347 -5.22939e-05 -0.000214913"
+                  mass="0.327214" diaginertia="0.008159 0.00813104 0.000214962"/>
+                <joint name="Left_Elbow_Yaw" axis="0 0 1" range="-2.44 0" actuatorfrcrange="-18 18" class="arm_motor"/>
+                <geom class="visual" mesh="AL4_collisions"/>       
+                <body name="AL5" pos="0 0.104836 -0.00025">
+                <inertial pos="0 0 0" mass="0.42219" diaginertia="0.001 0.001 0.001" />
+                <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="AL5_collisions"/>
+                <body name="AL6" pos="0 0.0421635 0">
+                    <inertial pos="0 0 0" mass="0.26532" diaginertia="0.001 0.001 0.001" />
+                    <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="AL6_collisions"/>
+                        
+                    <body name="AL7" pos="0 0.07 0">
+                    <inertial pos="0 0.0246263 0" quat="0.707107 0.707107 0 0" mass="0.20675" diaginertia="0.00205791 0.00205791 0.002" />
+                    <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" pos="-0.0781592 -0.0670567 -0.248693" quat="3.37032e-05 3.36513e-05 0.707108 -0.707106" mesh="T1_L_hand_base_link_collisions"/>
+                            
+                    <body name="L_index_proximal" pos="0.0182311 0.173012 0.000286692" quat="0.0173105 -0.00222314 7e-01 0.992046">
+                        <inertial pos="0 0 0" mass="0.0042405" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="7.67949e-08 0 1e-07 -1" mesh="L_index_proximal_collisions"/>
+                        <body name="L_index_distal" pos="-0.0016538 -0.030445 -0.010275" quat="0.999803 9e-01 0 0">
+                        <inertial pos="0 0 0" mass="0.0045682" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="7.67949e-08 0 1e-07 -1" mesh="L_index_distal_collisions"/>
+                        </body>
+                    </body>
 
+                    <body name="L_middle_proximal" pos="-0.00111491 0.173012 0.000284893" quat="5.98039e-06 4.73002e-05 -7e-01 -0.992198">
+                        <inertial pos="0 0 0" mass="0.0042405" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="-2.32051e-08 0 4.5e-07 -1" mesh="L_middle_proximal_collisions"/>
+                        <body name="L_middle_distal" pos="-0.0016698 -0.030445 -0.010275" quat="0.999363 9e-01 0 0">
+                        <inertial pos="0 0 0" mass="0.0050397" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="-2.32051e-08 0 -3e-07 -1" mesh="L_middle_distal_collisions"/>
+                        </body>
+                    </body>
+                    <body name="L_pinky_proximal" pos="-0.0449269 0.169672 0.000280685" quat="0.0519337 -0.00647756 -7e-01 -0.990838">
+                        <inertial pos="0 0 0" mass="0.0042405" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="7.67949e-08 0 -2e-07 1" mesh="L_pinky_proximal_collisions"/>
+                        <body name="L_pinky_distal" pos="0 -0.030445 -0.010275" quat="0.999822 9e-01 1.88442e-09 -9.99822e-08">
+                        <inertial pos="0 0 0" mass="0.0036036" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="7.67949e-08 0 -1e-07 -1" mesh="L_pinky_distal_collisions"/>
+                        </body>
+                    </body>
+                    <body name="L_ring_proximal" pos="-0.0230849 0.172032 0.000282791" quat="0.0259788 -0.00321623 -7e-01 -0.991858">
+                        <inertial pos="0 0 0" mass="0.0042405" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="1.76795e-07 0 -6.5e-07 1" mesh="L_ring_proximal_collisions"/>
+                        <body name="L_ring_distal" pos="-0.0015355 -0.030445 -0.010275" quat="0.999803 9e-01 -2.981e-09 -1.4997e-07">
+                        <inertial pos="0 0 0" mass="0.0045682" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="7.67949e-08 0 -1.5e-07 1" mesh="L_ring_distal_collisions"/>
+                        </body>
+                    </body>
+
+                            
+
+                    <body name="L_thumb_proximal_base" pos="0.0204517 0.0912025 -0.0169534" quat="-0.0845463 -5e-02 0.99642 3.64719e-06">
+                        <inertial pos="0 0 0" mass="0.0018869" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="0.988771 0 0.149438 0" mesh="L_thumb_proximal_base_collisions"/>
+                            
+                        <body name="L_thumb_proximal" pos="-0.0115 0.005 0.0034" quat="0.173917 0.567445 0.235846 -0.769503">
+                        <inertial pos="0 0 0" mass="0.0066101" diaginertia="0.001 0.001 0.001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="-2.32051e-08 0 0 -1" mesh="L_thumb_proximal_collisions"/>
+                                
+                        <body name="L_thumb_intermediate" pos="0 -0.055863 -0.0039241" quat="0.999817 4e-01 0 0">
+                            <inertial pos="0 0 0" mass="0.0037844" diaginertia="0.001 0.001 0.001" />
+                            <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="-2.32051e-08 0 0 -1" mesh="L_thumb_intermediate_collisions"/>
+                            <body name="L_thumb_distal" pos="0 -0.022558 0.0020717" quat="0.999983 1e-01 0 0">
+                            <inertial pos="0 0 0" mass="0.003344" diaginertia="0.001 0.001 0.001" />
+                            <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="-2.32051e-08 0 0 -1" mesh="L_thumb_distal_collisions"/>
+                            </body>
+                        </body>
+                        </body> 
+                    </body> 
+                    </body>              
+                </body>
+                </body>
             </body>
           </body>
         </body>
@@ -149,23 +236,74 @@
             <joint name="Right_Elbow_Pitch" axis="0 1 0" range="-2.27 2.27" actuatorfrcrange="-18 18" class="arm_motor"/>
             <geom class="visual" mesh="AR3"/>
             <geom name="AR3" class="collision" type="mesh" mesh="AR3" contype="1" conaffinity="1"/>
-            <body name="right_hand_link" pos="0 -0.1471 0">
+            <body name="AR4" pos="0 -0.1471 0">
               <inertial pos="-0.000108 -0.109573 0.000591" quat="0.706347 0.707866 0.000214913 5.22939e-05"
                 mass="0.327214" diaginertia="0.008159 0.00813104 0.000214962"/>
               <joint name="Right_Elbow_Yaw" axis="0 0 1" range="0 2.44" actuatorfrcrange="-18 18" class="arm_motor"/>
-              <geom class="visual" mesh="right_hand_link"/>
-              <geom name="right_hand_link" class="collision" type="mesh" mesh="right_hand_link" contype="1" conaffinity="1"/>
-              <body name="right_hand_sphere_link" pos="0.0 -0.2 0.0" quat="1 0 0 0">
-                <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                <geom name="right_hand_sphere_link"
-                      type="sphere"
-                      size="0.005"
-                      pos="0.0 0.0 0.0"
-                      rgba="0.2 0.2 0.2 1"
-                      contype="1"
-                      conaffinity="1"
-                />
+              <geom class="visual" mesh="AR4_collisions"/>
+              <body name="AR5" pos="0 -0.105 -0.00025">
+              <inertial pos="0 0 0" mass="0.43402" diaginertia="0.001 0.001 0.001" />
+              <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="AR5_collisions"/>
+              <body name="AR6" pos="0 -0.042 0">
+                  <inertial pos="0 0 0" mass="0.28215" diaginertia="0.001 0.001 0.001" />
+                  <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="AR6_collisions"/>
+                  <body name="AR7" pos="0 -0.07 0">
+                  <inertial pos="0 -0.0246263 0" quat="0.707107 0.707107 0 0" mass="0.20675" diaginertia="0.00205791 0.00205791 0.002" />
+                  <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" pos="-0.0781592 -0.119083 -0.248684" quat="3.3785e-05 3.37815e-05 0.70707 -0.707143" mesh="T1_R_hand_base_link_collisions"/>
+                  <body name="R_index_proximal" pos="0.0163761 -0.173083 0.000300212" quat="7e-01 -0.99241 -0.0173172 -0.00217029">
+                      <inertial pos="0 0 0" mass="0.0042403" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="R_index_proximal_collisions"/>
+                      <body name="R_index_distal" pos="0.001575 0.030445 0.010275" quat="0.999755 9e-01 0 0">
+                      <inertial pos="0 0 0" mass="0.0045683" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="R_index_distal_collisions"/>
+                      </body>
+                  </body>
+                  <body name="R_middle_proximal" pos="-0.0011149 -0.1731 0.000298614" quat="7e-01 -0.992192 5.94427e-06 -4.73282e-05">
+                      <inertial pos="0 0 0" mass="0.0042403" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="1 5e-08 0 0" mesh="R_middle_proximal_collisions"/>
+                      <body name="R_middle_distal" pos="0.0016673 0.030445 0.010275" quat="0.999363 9e-01 0 0">
+                      <inertial pos="0 0 0" mass="0.0050396" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="R_middle_distal_collisions"/>
+                      </body>
+                  </body>
+                  <body name="R_pinky_proximal" pos="-0.0393009 -0.170263 3.86194e-05" quat="7e-01 -0.990832 0.051934 0.00647475">
+                      <inertial pos="0 0 0" mass="0.0042403" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="1 5e-08 0 0" mesh="R_pinky_proximal_collisions"/>
+                      <body name="R_pinky_distal" pos="0 0.030445 0.010275" quat="0.999822 9e-01 0 0">
+                      <inertial pos="0 0 0" mass="0.0035996" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="R_pinky_distal_collisions"/>
+                      </body>
+                  </body>
+                  <body name="R_ring_proximal" pos="-0.0202889 -0.172177 0.000296618" quat="7e-01 -0.991852 0.0259789 0.00321481">
+                      <inertial pos="0 0 0" mass="0.0042403" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="R_ring_proximal_collisions"/>
+                      <body name="R_ring_distal" pos="0 0.030445 0.010275" quat="0.999803 9e-01 0 0">
+                      <inertial pos="0 0 0" mass="0.0045683" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="R_ring_distal_collisions"/>
+                      </body>
+                  </body>
+                  <body name="R_thumb_proximal_base" pos="0.0204517 -0.107695 -0.0169462" quat="0.230031 -1.4e-01 -0.973183 5.5786e-05">
+                      <inertial pos="0 0 0" mass="0.0018869" diaginertia="0.001 0.001 0.001" />
+                      <geom quat="7.67949e-08 1 0 0" mesh="R_thumb_proximal_base_collisions"/>
+                      <body name="R_thumb_proximal" pos="-0.0115 0.011843 0" quat="0.252468 0.660498 -0.252469 0.660501">
+                      <inertial pos="0 0 0" mass="0.0066075" diaginertia="0.001 0.001 0.001" />
+                      <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" quat="1 0 -5e-08 0" mesh="R_thumb_proximal_collisions"/>
+                      <body name="R_thumb_intermediate" pos="0 0.055863 0.0039241" quat="0.999817 4e-01 -4.99908e-08 -9.57416e-10">
+                          <inertial pos="0 0 0" mass="0.0037847" diaginertia="0.001 0.001 0.001" />
+                          <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="R_thumb_intermediate_collisions"/>
+                          <body name="R_thumb_distal" pos="0 0.022558 -0.0020717" quat="0.999983 1e-01 0 0">
+                          <inertial pos="0 0 0" mass="0.0033441" diaginertia="0.001 0.001 0.001" />
+                          <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="R_thumb_distal_collisions"/>
+                          </body>
+                      </body>
+                      </body>
+                  </body>
+                  </body>
               </body>
+              </body>
+
+
+
 
             </body>
           </body>
