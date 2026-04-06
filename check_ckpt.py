@@ -10,7 +10,7 @@ ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
 print("\n=== Checkpoint Keys ===")
 for k in ckpt.keys():
     print(f"  {k}")
-
+# testing
 print("\n=== Actor State Dict First Keys ===")
 for i, (k, v) in enumerate(ckpt["actor_state_dict"].items()):
     if i < 10:
