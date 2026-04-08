@@ -403,6 +403,13 @@ class FastTD3Env:
         # Clip actions
         actions = torch.clamp(actions, -self.clip_actions, self.clip_actions)
 
+        # Track actions for penalty_action_rate (step_direct_pd bypasses action_manager)
+        if not hasattr(env, '_reward_prev_action'):
+            env._reward_prev_action = torch.zeros_like(actions)
+            env._reward_action = torch.zeros_like(actions)
+        env._reward_prev_action.copy_(env._reward_action)
+        env._reward_action.copy_(actions)
+
         # Scale actions
         scaled_actions = actions * self.action_scale
 
@@ -446,6 +453,9 @@ class FastTD3Env:
             # Apply torques and step physics once
             env.simulator.apply_torques_at_dof(torques_full)
             env.simulator.simulate_at_each_physics_step()
+
+        # Store final-substep torques for reward functions (penalty_torques, etc.)
+        env._reward_torques = torques_full
 
         # ========================================================================
         # POST-PHYSICS: Termination, reset, and reward computation
@@ -493,11 +503,10 @@ class FastTD3Env:
         if env_ids_to_reset.numel() > 0:
             env.reset_envs_idx(env_ids_to_reset)
 
-            # Clear velocity commands for reset environments
-            if hasattr(env, "command_manager") and hasattr(env.command_manager, "commands"):
-                env.command_manager.commands[env_ids_to_reset, :3] = 0.0
-            if hasattr(env.simulator, "commands"):
-                env.simulator.commands[env_ids_to_reset, :3] = 0.0
+            # NOTE: Do NOT zero commands here — reset_envs_idx already calls
+            # command_manager.reset() which resamples fresh commands (including
+            # stand_prob handling). Zeroing here would override the resampled
+            # commands and cause the gait phase to get stuck at pi (standing).
 
             # Refresh environments after reset
             if hasattr(env, "_get_envs_to_refresh") and hasattr(env, "_refresh_envs_after_reset"):
@@ -507,6 +516,11 @@ class FastTD3Env:
 
             # Reset gait tracker for done environments
             self.gait_tracker.reset(env_ids_to_reset)
+
+            # Reset action tracking buffers for done environments
+            if hasattr(env, '_reward_action'):
+                env._reward_action[env_ids_to_reset] = 0.0
+                env._reward_prev_action[env_ids_to_reset] = 0.0
 
         # Get commands for gait phase update
         if hasattr(env, "command_manager"):
@@ -521,20 +535,21 @@ class FastTD3Env:
             commands=commands,
         )
 
-        # CRITICAL: Update last_actions BEFORE computing observation
+        # Build FastTD3 observations BEFORE updating last_actions
+        # so that obs[51:71] contains action_{t-1} (like MuJoCo), not action_t
+        obs = self.obs_builder.compute(
+            gait_process=gait_process,
+            last_actions=self._last_actions,
+            commands=commands,
+        )
+
+        # Update last_actions AFTER obs computation (matches MuJoCo timing)
         self._last_actions.copy_(actions)
 
         # Reset last actions for done environments
         if dones.any():
             done_mask = dones.bool()
             self._last_actions[done_mask] = 0.0
-
-        # Build FastTD3 observations
-        obs = self.obs_builder.compute(
-            gait_process=gait_process,
-            last_actions=self._last_actions,
-            commands=commands,
-        )
 
         # Build info dict
         info = {

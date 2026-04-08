@@ -9,6 +9,13 @@ t1_29dof_command = CommandManagerCfg(
     setup_terms={
         "locomotion_gait": CommandTermCfg(
             func="holosoma.managers.command.terms.locomotion:LocomotionGait",
+            params={
+                # 1.5 Hz gait (period=0.667s) matches MuJoCo Playground default.
+                # Randomization width of 0.25 Hz covers MuJoCo's [1.25, 1.75] Hz range.
+                "gait_period": 0.6667,
+                "gait_period_randomization_width": 0.25,
+                "randomize_phase": True,
+            },
         ),
         "locomotion_command": CommandTermCfg(
             func="holosoma.managers.command.terms.locomotion:LocomotionCommand",

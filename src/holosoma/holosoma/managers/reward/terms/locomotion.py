@@ -65,14 +65,22 @@ def termination(env: LeggedRobotLocomotionManager) -> torch.Tensor:
 def penalty_action_rate(env: LeggedRobotLocomotionManager) -> torch.Tensor:
     """Penalize changes in actions between steps.
 
+    Uses self-managed buffers (env._reward_action / env._reward_prev_action)
+    when available (set by step_direct_pd), falling back to action_manager
+    for the standard env.step() path.
+
     Args:
         env: The environment instance
 
     Returns:
         Reward tensor [num_envs]
     """
-    actions = env.action_manager.action
-    prev_actions = env.action_manager.prev_action
+    if hasattr(env, '_reward_action') and hasattr(env, '_reward_prev_action'):
+        actions = env._reward_action
+        prev_actions = env._reward_prev_action
+    else:
+        actions = env.action_manager.action
+        prev_actions = env.action_manager.prev_action
     return torch.sum(torch.square(prev_actions - actions), dim=1)
 
 
@@ -141,9 +149,12 @@ def limits_dof_pos(env: LeggedRobotLocomotionManager, soft_dof_pos_limit: float 
 
 
 def tracking_lin_vel(env, tracking_sigma: float = 0.25) -> torch.Tensor:
-    """Reward tracking of linear velocity commands (xy axes).
+    """Reward tracking of linear velocity commands (xy axes combined).
 
-    Uses exponential reward: exp(-error / sigma)
+    Uses exponential reward: exp(-(ex² + ey²) / sigma).
+    NOTE: This combines both axes into one exp(), which differs from MuJoCo's
+    per-axis tracking. Use ``tracking_lin_vel_x`` / ``tracking_lin_vel_y`` for
+    exact MuJoCo T1 joystick parity.
 
     Args:
         env: The environment instance
@@ -155,6 +166,42 @@ def tracking_lin_vel(env, tracking_sigma: float = 0.25) -> torch.Tensor:
     commands = env.command_manager.commands
     lin_vel_error = torch.sum(torch.square(commands[:, :2] - get_base_lin_vel(env)[:, :2]), dim=1)
     return torch.exp(-lin_vel_error / tracking_sigma)
+
+
+def tracking_lin_vel_x(env, tracking_sigma: float = 0.25) -> torch.Tensor:
+    """Reward tracking of x-axis linear velocity command.
+
+    Per-axis version matching MuJoCo joystick ``_reward_tracking_lin_vel_axis(0)``.
+
+    Args:
+        env: The environment instance
+        tracking_sigma: Sigma for exponential reward scaling
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    commands = env.command_manager.commands
+    lin_vel = get_base_lin_vel(env)
+    err = torch.square(commands[:, 0] - lin_vel[:, 0])
+    return torch.exp(-err / tracking_sigma)
+
+
+def tracking_lin_vel_y(env, tracking_sigma: float = 0.25) -> torch.Tensor:
+    """Reward tracking of y-axis linear velocity command.
+
+    Per-axis version matching MuJoCo joystick ``_reward_tracking_lin_vel_axis(1)``.
+
+    Args:
+        env: The environment instance
+        tracking_sigma: Sigma for exponential reward scaling
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    commands = env.command_manager.commands
+    lin_vel = get_base_lin_vel(env)
+    err = torch.square(commands[:, 1] - lin_vel[:, 1])
+    return torch.exp(-err / tracking_sigma)
 
 
 def tracking_ang_vel(env, tracking_sigma: float = 0.25) -> torch.Tensor:
@@ -189,7 +236,10 @@ def penalty_ang_vel_xy(env) -> torch.Tensor:
 
 
 def penalty_close_feet_xy(env, close_feet_threshold: float = 0.05) -> torch.Tensor:
-    """Penalize when feet are too close together in xy plane.
+    """Penalize when feet are too close together in xy plane (binary).
+
+    NOTE: This is a simplified binary version. Use ``penalty_feet_distance``
+    for the exact MuJoCo T1 joystick continuous formulation.
 
     Args:
         env: The environment instance
@@ -213,6 +263,39 @@ def penalty_close_feet_xy(env, close_feet_threshold: float = 0.05) -> torch.Tens
 
     # Return penalty when feet are too close
     return (feet_distance < close_feet_threshold).float()
+
+
+def penalty_feet_distance(
+    env,
+    min_distance: float = 0.2,
+    max_penalty: float = 0.1,
+) -> torch.Tensor:
+    """Continuous feet-distance penalty matching MuJoCo ``_cost_feet_distance``.
+
+    Returns ``clip(min_distance - lateral_dist, 0, max_penalty)``.
+    Zero when feet are at least ``min_distance`` apart; linearly grows as they
+    get closer, capped at ``max_penalty``.
+
+    Args:
+        env: The environment instance
+        min_distance: Desired minimum lateral distance between feet (m)
+        max_penalty: Maximum per-step penalty value
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    left_foot_pos = env.simulator._rigid_body_pos[:, env.feet_indices[0]]
+    right_foot_pos = env.simulator._rigid_body_pos[:, env.feet_indices[1]]
+
+    base_forward = quat_apply(env.base_quat, base_forward_vector(env), w_last=True)
+    base_yaw = torch.atan2(base_forward[:, 1], base_forward[:, 0])
+
+    feet_distance = torch.abs(
+        torch.cos(base_yaw) * (left_foot_pos[:, 1] - right_foot_pos[:, 1])
+        - torch.sin(base_yaw) * (left_foot_pos[:, 0] - right_foot_pos[:, 0])
+    )
+
+    return torch.clamp(min_distance - feet_distance, min=0.0, max=max_penalty)
 
 
 def base_height(
@@ -260,7 +343,10 @@ def base_height(
 def feet_phase(env, swing_height: float = 0.08, tracking_sigma: float = 0.25) -> torch.Tensor:
     """Reward for tracking desired foot height based on gait phase.
 
-    Based on MuJoCo Playground's implementation.
+    Based on MuJoCo Playground's G1 implementation (continuous height tracking).
+    NOTE: This is NOT the same as MuJoCo T1 joystick.py's ``_reward_feet_swing``
+    which is a simpler binary contact-based reward. Use ``feet_swing`` below for
+    exact T1 joystick parity.
 
     Args:
         env: The environment instance
@@ -287,6 +373,48 @@ def feet_phase(env, swing_height: float = 0.08, tracking_sigma: float = 0.25) ->
     total_error = error_left + error_right
 
     return torch.exp(-total_error / tracking_sigma)
+
+
+def feet_swing(env, swing_period: float = 0.2) -> torch.Tensor:
+    """Binary swing reward matching MuJoCo T1 joystick.py ``_reward_feet_swing``.
+
+    During a time window around each foot's expected swing phase, reward +1 if
+    the foot is NOT in contact with the ground.  No height tracking — just
+    "be airborne during your swing window".
+
+    The gait cycle is divided as:
+      - Left  foot swings at ~25% of the cycle (gait ∈ [0.15, 0.35] for period=0.2)
+      - Right foot swings at ~75% of the cycle (gait ∈ [0.65, 0.85] for period=0.2)
+
+    Args:
+        env: The environment instance
+        swing_period: Fraction of the gait cycle that counts as swing window
+            (MuJoCo default 0.2 → each foot has a 20% swing window)
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    gait_state = env.command_manager.get_state("locomotion_gait")
+    # Use phase[:, 0] (left foot phase) — same as MuJoCo's phase[0]
+    phi = gait_state.phase[:, 0]  # in [-π, π]
+
+    # Convert to [0, 1) fraction of cycle — same as MuJoCo:
+    #   gait = fmod(phase[0] + π, 2π) / (2π)
+    gait = torch.fmod(phi + torch.pi, 2 * torch.pi) / (2 * torch.pi)
+
+    half_window = 0.5 * swing_period
+
+    left_swing = torch.abs(gait - 0.25) < half_window
+    right_swing = torch.abs(gait - 0.75) < half_window
+
+    # Contact detection from contact forces
+    contact_left = env.simulator.contact_forces[:, env.feet_indices[0], 2] > 1.0
+    contact_right = env.simulator.contact_forces[:, env.feet_indices[1], 2] > 1.0
+
+    # Reward: +1 per foot that is airborne during its swing window
+    reward = (left_swing & ~contact_left).float() + (right_swing & ~contact_right).float()
+
+    return reward
 
 
 def pose(
@@ -407,14 +535,19 @@ def alive(env) -> torch.Tensor:
 def penalty_torques(env: LeggedRobotLocomotionManager) -> torch.Tensor:
     """Penalize total squared torques.
 
+    Uses env._reward_torques when available (set by step_direct_pd),
+    falling back to action_manager for the standard env.step() path.
+
     Args:
         env: The environment instance
 
     Returns:
         Reward tensor [num_envs]
     """
-    # Get applied torques from action manager
-    torques = env.action_manager.applied_torques
+    if hasattr(env, '_reward_torques'):
+        torques = env._reward_torques
+    else:
+        torques = env.action_manager.applied_torques
     return torch.sum(torch.square(torques), dim=1)
 
 
@@ -423,13 +556,19 @@ def penalty_energy(env: LeggedRobotLocomotionManager) -> torch.Tensor:
 
     This is effectively energy consumption penalty.
 
+    Uses env._reward_torques when available (set by step_direct_pd),
+    falling back to action_manager for the standard env.step() path.
+
     Args:
         env: The environment instance
 
     Returns:
         Reward tensor [num_envs]
     """
-    torques = env.action_manager.applied_torques
+    if hasattr(env, '_reward_torques'):
+        torques = env._reward_torques
+    else:
+        torques = env.action_manager.applied_torques
     dof_vel = env.simulator.dof_vel
     power = torques * dof_vel
     positive_power = torch.where(power > 0, power, torch.zeros_like(power))
@@ -441,13 +580,19 @@ def penalty_torque_tiredness(env: LeggedRobotLocomotionManager) -> torch.Tensor:
 
     sum((torque / torque_limit)^2), clamped to 1.0 max ratio.
 
+    Uses env._reward_torques when available (set by step_direct_pd),
+    falling back to action_manager for the standard env.step() path.
+
     Args:
         env: The environment instance
 
     Returns:
         Reward tensor [num_envs]
     """
-    torques = env.action_manager.applied_torques
+    if hasattr(env, '_reward_torques'):
+        torques = env._reward_torques
+    else:
+        torques = env.action_manager.applied_torques
     torque_limits = env.torque_limits
 
     # Compute ratio and clamp
@@ -486,7 +631,9 @@ def penalty_dof_vel(env: LeggedRobotLocomotionManager) -> torch.Tensor:
 def penalty_dof_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
     """Penalize joint accelerations.
 
-    Uses finite differences from last velocity.
+    Uses finite differences from last velocity.  Stores the previous-step
+    velocity buffer on ``env`` as ``_reward_last_dof_vel`` so it persists
+    across calls even when the simulator does not track it.
 
     Args:
         env: The environment instance
@@ -495,37 +642,10 @@ def penalty_dof_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
         Reward tensor [num_envs]
     """
     dof_vel = env.simulator.dof_vel
-    last_dof_vel = env.simulator.last_dof_vel
 
-    # Get dt from simulator
-    if hasattr(env.simulator, "config") and hasattr(env.simulator.config, "sim"):
-        dt = 1.0 / env.simulator.config.sim.fps * env.simulator.config.sim.control_decimation
-    else:
-        dt = 0.02  # Default control dt
-
-    dof_acc = (dof_vel - last_dof_vel) / dt
-    return torch.sum(torch.square(dof_acc), dim=1)
-
-
-def penalty_root_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
-    """Penalize root link acceleration.
-
-    Args:
-        env: The environment instance
-
-    Returns:
-        Reward tensor [num_envs]
-    """
-    # Get linear and angular acceleration
-    lin_vel = env.simulator._robot.data.root_lin_vel_w
-    ang_vel = env.simulator._robot.data.root_ang_vel_w
-
-    # Use last velocities if available
-    if hasattr(env.simulator, "last_root_lin_vel"):
-        last_lin_vel = env.simulator.last_root_lin_vel
-        last_ang_vel = env.simulator.last_root_ang_vel
-    else:
-        # First step, no penalty
+    if not hasattr(env, "_reward_last_dof_vel"):
+        # First call – initialise buffer and return zero penalty
+        env._reward_last_dof_vel = dof_vel.clone()
         return torch.zeros(env.num_envs, device=env.device)
 
     if hasattr(env.simulator, "config") and hasattr(env.simulator.config, "sim"):
@@ -533,8 +653,41 @@ def penalty_root_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
     else:
         dt = 0.02
 
-    lin_acc = (lin_vel - last_lin_vel) / dt
-    ang_acc = (ang_vel - last_ang_vel) / dt
+    dof_acc = (dof_vel - env._reward_last_dof_vel) / dt
+    env._reward_last_dof_vel = dof_vel.clone()
+    return torch.sum(torch.square(dof_acc), dim=1)
+
+
+def penalty_root_acc(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize root link acceleration.
+
+    Stores previous-step root velocities on ``env`` as
+    ``_reward_last_root_lin_vel`` / ``_reward_last_root_ang_vel``.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    lin_vel = env.simulator._robot.data.root_lin_vel_w
+    ang_vel = env.simulator._robot.data.root_ang_vel_w
+
+    if not hasattr(env, "_reward_last_root_lin_vel"):
+        env._reward_last_root_lin_vel = lin_vel.clone()
+        env._reward_last_root_ang_vel = ang_vel.clone()
+        return torch.zeros(env.num_envs, device=env.device)
+
+    if hasattr(env.simulator, "config") and hasattr(env.simulator.config, "sim"):
+        dt = 1.0 / env.simulator.config.sim.fps * env.simulator.config.sim.control_decimation
+    else:
+        dt = 0.02
+
+    lin_acc = (lin_vel - env._reward_last_root_lin_vel) / dt
+    ang_acc = (ang_vel - env._reward_last_root_ang_vel) / dt
+
+    env._reward_last_root_lin_vel = lin_vel.clone()
+    env._reward_last_root_ang_vel = ang_vel.clone()
 
     return torch.sum(torch.square(lin_acc), dim=1) + torch.sum(torch.square(ang_acc), dim=1)
 
@@ -587,3 +740,188 @@ def penalty_feet_roll(env: LeggedRobotLocomotionManager) -> torch.Tensor:
     right_roll = torch.atan2(right_gravity[:, 1], -right_gravity[:, 2])
 
     return torch.square(left_roll) + torch.square(right_roll)
+
+
+def _feet_yaw(env) -> torch.Tensor:
+    """Extract yaw angles of both feet from their world-frame quaternions.
+
+    Returns:
+        Tensor of shape [num_envs, 2] with [left_yaw, right_yaw] in radians.
+    """
+    yaws = []
+    for i in range(2):
+        quat = env.simulator._rigid_body_rot[:, env.feet_indices[i]]  # [E, 4] wxyz
+        # Extract yaw = atan2(R21, R11) from quaternion
+        # For wxyz quaternion: w=q0, x=q1, y=q2, z=q3
+        w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
+        # R[1,0] = 2(xy + wz),  R[0,0] = 1 - 2(y² + z²)
+        r10 = 2.0 * (x * y + w * z)
+        r00 = 1.0 - 2.0 * (y * y + z * z)
+        yaws.append(torch.atan2(r10, r00))
+    return torch.stack(yaws, dim=1)
+
+
+def _base_yaw(env) -> torch.Tensor:
+    """Extract base (trunk) yaw angle.
+
+    Returns:
+        Tensor of shape [num_envs] with yaw in radians.
+    """
+    base_forward = quat_apply(env.base_quat, base_forward_vector(env), w_last=True)
+    return torch.atan2(base_forward[:, 1], base_forward[:, 0])
+
+
+def penalty_feet_yaw_diff(env) -> torch.Tensor:
+    """Penalize yaw angle difference between left and right foot.
+
+    Matches MuJoCo joystick ``_cost_feet_yaw_diff``.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    feet_yaw = _feet_yaw(env)
+    diff = torch.fmod(feet_yaw[:, 1] - feet_yaw[:, 0] + torch.pi, 2 * torch.pi) - torch.pi
+    return torch.square(diff)
+
+
+def penalty_feet_yaw_mean(env) -> torch.Tensor:
+    """Penalize mean foot yaw deviating from base yaw.
+
+    Matches MuJoCo joystick ``_cost_feet_yaw_mean``.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    feet_yaw = _feet_yaw(env)
+    mean_yaw = feet_yaw.mean(dim=1)
+    base_y = _base_yaw(env)
+    err = torch.fmod(base_y - mean_yaw + torch.pi, 2 * torch.pi) - torch.pi
+    return torch.square(err)
+
+
+def penalty_collision_feet(env) -> torch.Tensor:
+    """Penalize left and right feet colliding with each other.
+
+    Approximation of MuJoCo joystick ``_cost_collision`` which checks
+    ``geoms_colliding(left_foot, right_foot)``.  In Isaac Lab we detect this
+    when both feet have contact AND are within a small distance of each other.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Reward tensor [num_envs]  (0 or 1)
+    """
+    left_pos = env.simulator._rigid_body_pos[:, env.feet_indices[0], :3]
+    right_pos = env.simulator._rigid_body_pos[:, env.feet_indices[1], :3]
+    dist = torch.norm(left_pos - right_pos, dim=1)
+
+    # Both feet in contact AND very close (< ~23cm, sum of two foot half-extents)
+    contact_left = env.simulator.contact_forces[:, env.feet_indices[0], 2] > 1.0
+    contact_right = env.simulator.contact_forces[:, env.feet_indices[1], 2] > 1.0
+    return (contact_left & contact_right & (dist < 0.23)).float()
+
+
+def _get_dof_indices(env, joint_names: list[str]) -> torch.Tensor:
+    """Return DOF indices for given joint names, looked up from env.dof_names."""
+    dof_list = list(env.dof_names)
+    indices = [dof_list.index(n) for n in joint_names if n in dof_list]
+    return torch.tensor(indices, device=env.device, dtype=torch.long)
+
+
+def penalty_arm_roll(
+    env: LeggedRobotLocomotionManager,
+    target_left: float = -1.25,
+    target_right: float = 1.25,
+) -> torch.Tensor:
+    """Penalize shoulder roll deviation from neutral pose.
+
+    Matches MuJoCo joystick _cost_arm: keeps arms folded at sides.
+
+    Args:
+        env: The environment instance
+        target_left: Target angle for Left_Shoulder_Roll (rad)
+        target_right: Target angle for Right_Shoulder_Roll (rad)
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    idx = _get_dof_indices(env, ["Left_Shoulder_Roll", "Right_Shoulder_Roll"])
+    if len(idx) < 2:
+        return torch.zeros(env.num_envs, device=env.device)
+    q = env.simulator.dof_pos[:, idx]
+    return (q[:, 0] - target_left) ** 2 + (q[:, 1] - target_right) ** 2
+
+
+def penalty_arm_pitch(
+    env: LeggedRobotLocomotionManager,
+    target: float = 0.0,
+) -> torch.Tensor:
+    """Penalize shoulder pitch deviation from neutral pose.
+
+    Matches MuJoCo joystick _cost_arm_pitch.
+
+    Args:
+        env: The environment instance
+        target: Target angle for both shoulder pitch joints (rad)
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    idx = _get_dof_indices(env, ["Left_Shoulder_Pitch", "Right_Shoulder_Pitch"])
+    if len(idx) < 2:
+        return torch.zeros(env.num_envs, device=env.device)
+    q = env.simulator.dof_pos[:, idx]
+    return (q[:, 0] - target) ** 2 + (q[:, 1] - target) ** 2
+
+
+def penalty_arm_yaw(
+    env: LeggedRobotLocomotionManager,
+    target: float = 0.0,
+) -> torch.Tensor:
+    """Penalize elbow yaw deviation from neutral pose.
+
+    Matches MuJoCo joystick _cost_arm_yaw (uses Left/Right_Elbow_Pitch for yaw-like terms).
+
+    Args:
+        env: The environment instance
+        target: Target angle for both elbow pitch joints (rad)
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    idx = _get_dof_indices(env, ["Left_Elbow_Pitch", "Right_Elbow_Pitch"])
+    if len(idx) < 2:
+        return torch.zeros(env.num_envs, device=env.device)
+    q = env.simulator.dof_pos[:, idx]
+    return (q[:, 0] - target) ** 2 + (q[:, 1] - target) ** 2
+
+
+def penalty_elbow_yaw(
+    env: LeggedRobotLocomotionManager,
+    target_left: float = -0.5,
+    target_right: float = 0.5,
+) -> torch.Tensor:
+    """Penalize elbow yaw deviation from default pose.
+
+    Matches MuJoCo joystick _cost_elbow_pitch (Left_Elbow_Yaw / Right_Elbow_Yaw).
+
+    Args:
+        env: The environment instance
+        target_left: Target for Left_Elbow_Yaw (rad)
+        target_right: Target for Right_Elbow_Yaw (rad)
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    idx = _get_dof_indices(env, ["Left_Elbow_Yaw", "Right_Elbow_Yaw"])
+    if len(idx) < 2:
+        return torch.zeros(env.num_envs, device=env.device)
+    q = env.simulator.dof_pos[:, idx]
+    return (q[:, 0] - target_left) ** 2 + (q[:, 1] - target_right) ** 2

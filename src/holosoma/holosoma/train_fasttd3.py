@@ -646,11 +646,102 @@ def main():
                         dt = env._env.dt
                         weighted = rew_raw * term_cfg.weight * dt
 
-                        print(f"  {term_name:25s} | raw: {rew_raw.mean().item():8.4f} | weight: {term_cfg.weight:8.4f} | contrib: {weighted.mean().item():8.4f}")
+                        flag = " << ZERO!" if abs(rew_raw.mean().item()) < 1e-10 else ""
+                        print(f"  {term_name:25s} | raw: {rew_raw.mean().item():8.4f} | weight: {term_cfg.weight:8.4f} | contrib: {weighted.mean().item():8.4f}{flag}")
                     except Exception as e:
                         print(f"  {term_name:25s} | ERROR: {e}")
 
-                print("=" * 60 + "\n")
+                print("=" * 60)
+
+                # --- Action rate buffer check ---
+                base_env = env._env
+                if hasattr(base_env, '_reward_action') and hasattr(base_env, '_reward_prev_action'):
+                    action_diff = (base_env._reward_action - base_env._reward_prev_action).abs().mean().item()
+                    print(f"  [DIAG] action_rate buf diff (>0 = working): {action_diff:.6f}")
+                else:
+                    print("  [DIAG] WARNING: _reward_action buffers NOT set — penalty_action_rate broken!")
+
+                # --- Per-joint-group action magnitude ---
+                joint_groups = {
+                    "arms_L":  [0, 1, 2, 3],
+                    "arms_R":  [4, 5, 6, 7],
+                    "hips_L":  [8, 9, 10],
+                    "knee_L":  [11],
+                    "ankle_L": [12, 13],
+                    "hips_R":  [14, 15, 16],
+                    "knee_R":  [17],
+                    "ankle_R": [18, 19],
+                }
+                act = actions  # current step's actions [num_envs, 20]
+                print(f"  [DIAG] Action magnitude by joint group:")
+                for group, idx in joint_groups.items():
+                    mag = act[:, idx].abs().mean().item()
+                    print(f"    {group:10s}: {mag:.4f}")
+
+                # --- Obs last_actions timing check ---
+                if obs.shape[-1] >= 71:
+                    last_act_in_obs = obs[:, 51:71]
+                    obs_vs_act = (last_act_in_obs - actions).abs().mean().item()
+                    print(f"  [DIAG] obs_last_act vs current_act diff (>0 = correct timing): {obs_vs_act:.6f}")
+
+                # --- Torque buffer check ---
+                if hasattr(base_env, '_reward_torques'):
+                    t_mag = base_env._reward_torques.abs().mean().item()
+                    print(f"  [DIAG] torque buf magnitude (>0 = working): {t_mag:.4f}")
+                else:
+                    print("  [DIAG] WARNING: _reward_torques not set — torque penalties broken!")
+
+                # --- feet_swing debug ---
+                if hasattr(base_env, 'simulator') and hasattr(base_env, 'feet_indices'):
+                    cf_left = base_env.simulator.contact_forces[:, base_env.feet_indices[0], 2]
+                    cf_right = base_env.simulator.contact_forces[:, base_env.feet_indices[1], 2]
+                    airborne_left = (cf_left < 1.0).float().mean().item()
+                    airborne_right = (cf_right < 1.0).float().mean().item()
+                    print(f"  [DIAG] feet airborne frac: left={airborne_left:.3f}, right={airborne_right:.3f}")
+                    print(f"  [DIAG] contact force stats: left min={cf_left.min().item():.2f} mean={cf_left.mean().item():.2f} max={cf_left.max().item():.2f}")
+                    print(f"  [DIAG] contact force stats: right min={cf_right.min().item():.2f} mean={cf_right.mean().item():.2f} max={cf_right.max().item():.2f}")
+
+                # --- Gait phase cycling check ---
+                if hasattr(base_env, 'command_manager'):
+                    try:
+                        gait_state = base_env.command_manager.get_state("locomotion_gait")
+                        phase = gait_state.phase[:, 0]
+                        at_pi = (phase.abs() - torch.pi).abs() < 0.1
+                        print(f"  [DIAG] gait phase: min={phase.min().item():.3f} mean={phase.mean().item():.3f} max={phase.max().item():.3f} (should span [-pi, pi])")
+                        print(f"  [DIAG] phase stuck at pi: {at_pi.float().mean().item()*100:.1f}% of envs")
+                        print(f"  [DIAG] phase_dt: min={gait_state.phase_dt.min().item():.4f} mean={gait_state.phase_dt.mean().item():.4f} max={gait_state.phase_dt.max().item():.4f}")
+                    except Exception as e:
+                        print(f"  [DIAG] gait phase read failed: {e}")
+
+                # --- Command analysis ---
+                if hasattr(base_env, 'command_manager'):
+                    try:
+                        cmd = base_env.command_manager.commands
+                        cmd_norm = torch.linalg.norm(cmd[:, :2], dim=1)
+                        near_zero_cmd = torch.logical_and(cmd_norm < 0.01, cmd[:, 2].abs() < 0.01)
+                        print(f"  [DIAG] commands: x={cmd[:, 0].mean().item():.3f} y={cmd[:, 1].mean().item():.3f} yaw={cmd[:, 2].mean().item():.3f}")
+                        print(f"  [DIAG] envs with ~zero commands (stand): {near_zero_cmd.float().mean().item()*100:.1f}% (expected ~20%)")
+                        print(f"  [DIAG] cmd magnitude: min={cmd_norm.min().item():.3f} mean={cmd_norm.mean().item():.3f} max={cmd_norm.max().item():.3f}")
+                    except Exception as e:
+                        print(f"  [DIAG] command analysis failed: {e}")
+
+                # --- Actual base velocity vs commanded ---
+                if hasattr(base_env, 'command_manager') and hasattr(base_env, 'simulator'):
+                    try:
+                        cmd = base_env.command_manager.commands
+                        root_states = base_env.simulator.robot_root_states
+                        base_lin_vel_world = root_states[:, 7:10]
+                        base_quat = base_env.simulator.base_quat
+                        from holosoma.utils.rotations import quat_rotate_inverse
+                        local_vel = quat_rotate_inverse(base_quat, base_lin_vel_world, w_last=True)
+                        print(f"  [DIAG] actual vel: x={local_vel[:, 0].mean().item():.3f} y={local_vel[:, 1].mean().item():.3f}")
+                        vel_error_x = (local_vel[:, 0] - cmd[:, 0]).abs().mean().item()
+                        vel_error_y = (local_vel[:, 1] - cmd[:, 1]).abs().mean().item()
+                        print(f"  [DIAG] tracking error: x={vel_error_x:.3f} y={vel_error_y:.3f}")
+                    except Exception as e:
+                        print(f"  [DIAG] velocity check failed: {e}")
+
+                print()
 
             # Save checkpoint
             if args.save_interval > 0 and global_step > 0 and global_step % args.save_interval == 0:
