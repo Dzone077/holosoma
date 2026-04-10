@@ -1062,7 +1062,7 @@ t1_29dof_waist_wrist = RobotConfig(
             "Hand_Roll": 2,       # Was 0.5, adjusted
         },
         action_scale=0.25,
-        action_clip_value=100.0,
+        action_clip_value=1.0,
         clip_actions=True,
         clip_torques=True,
     ),

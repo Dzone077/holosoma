@@ -367,8 +367,21 @@ t1_20dof_fast_td3 = RewardManagerCfg(
             weight=-2.0,
             params={"target_left": -0.5, "target_right": 0.5},
         ),
-        # NOTE: collision_hand (-10.0) and stop (0.0) from MuJoCo are omitted.
-        # collision_hand requires hand-leg pair contact detection not available in Isaac Lab.
-        # stop is disabled (weight=0.0) in MuJoCo.
+        # stop: penalize joint velocities when standing still (Huber loss)
+        # Disabled in MuJoCo default (weight=0.0) but enabled here to prevent
+        # ankle oscillation on sharp stops — critical for real robot safety.
+        "penalty_stop": RewardTermCfg(
+            func="holosoma.managers.reward.terms.locomotion:penalty_stop",
+            weight=-0.5,
+            params={"delta": 0.5},
+        ),
+        # ankle velocity: penalize ankle oscillation/twisting
+        # Prevents ankle roll twist in midair and shaking on stop.
+        # Keep weight low — raw values ~10 so -0.01 gives ~-0.002 contrib
+        "penalty_ankle_vel": RewardTermCfg(
+            func="holosoma.managers.reward.terms.locomotion:penalty_ankle_vel",
+            weight=-0.5,
+            params={},
+        ),
     },
 )

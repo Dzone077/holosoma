@@ -416,7 +416,6 @@ def feet_swing(env, swing_period: float = 0.2) -> torch.Tensor:
 
     return reward
 
-
 def pose(
     env,
     pose_weights: list[float],
@@ -750,11 +749,10 @@ def _feet_yaw(env) -> torch.Tensor:
     """
     yaws = []
     for i in range(2):
-        quat = env.simulator._rigid_body_rot[:, env.feet_indices[i]]  # [E, 4] wxyz
-        # Extract yaw = atan2(R21, R11) from quaternion
-        # For wxyz quaternion: w=q0, x=q1, y=q2, z=q3
-        w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
-        # R[1,0] = 2(xy + wz),  R[0,0] = 1 - 2(y² + z²)
+        quat = env.simulator._rigid_body_rot[:, env.feet_indices[i]]  # [E, 4] xyzw
+        # _rigid_body_rot is in xyzw convention (converted from IsaacSim's wxyz)
+        x, y, z, w = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
+        # Extract yaw = atan2(R[1,0], R[0,0]) from quaternion
         r10 = 2.0 * (x * y + w * z)
         r00 = 1.0 - 2.0 * (y * y + z * z)
         yaws.append(torch.atan2(r10, r00))
@@ -925,3 +923,55 @@ def penalty_elbow_yaw(
         return torch.zeros(env.num_envs, device=env.device)
     q = env.simulator.dof_pos[:, idx]
     return (q[:, 0] - target_left) ** 2 + (q[:, 1] - target_right) ** 2
+
+
+def penalty_stop(env: LeggedRobotLocomotionManager, delta: float = 0.5) -> torch.Tensor:
+    """Penalize joint velocities when command is near zero (standing still).
+
+    Matches MuJoCo joystick _cost_stop: uses Huber-like loss (quadratic for
+    small velocities, linear for large) so the gradient doesn't explode.
+
+    Active only when ||command|| < 0.1. Zero cost when moving.
+
+    Args:
+        env: The environment instance
+        delta: Crossover from quadratic to linear regime
+
+    Returns:
+        Penalty tensor [num_envs]
+    """
+    commands = env.command_manager.commands
+    cmd_norm = torch.linalg.norm(commands[:, :3], dim=1)
+
+    qvel = env.simulator.dof_vel  # [num_envs, num_dof]
+    abs_v = torch.abs(qvel)
+    quad = torch.minimum(abs_v, torch.full_like(abs_v, delta))
+    lin = abs_v - quad
+    cost = torch.sum(0.5 * quad**2 / delta + lin, dim=1)
+
+    # Only penalize when standing (cmd_norm <= 0.1)
+    return torch.where(cmd_norm > 0.1, torch.zeros_like(cost), cost)
+
+
+def penalty_ankle_vel(env: LeggedRobotLocomotionManager) -> torch.Tensor:
+    """Penalize ankle joint velocities to reduce oscillation and twisting.
+
+    Discourages the ankle from twisting/oscillating in midair and during
+    stance-to-stop transitions. Uses squared velocity for smooth gradients.
+
+    Args:
+        env: The environment instance
+
+    Returns:
+        Penalty tensor [num_envs]
+    """
+    ankle_names = [
+        "Left_Ankle_Pitch", "Left_Ankle_Roll",
+        "Right_Ankle_Pitch", "Right_Ankle_Roll",
+    ]
+    idx = _get_dof_indices(env, ankle_names)
+    if len(idx) == 0:
+        return torch.zeros(env.num_envs, device=env.device)
+
+    ankle_vel = env.simulator.dof_vel[:, idx]
+    return torch.sum(torch.square(ankle_vel), dim=1)

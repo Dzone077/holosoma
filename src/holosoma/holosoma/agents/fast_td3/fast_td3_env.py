@@ -167,6 +167,63 @@ class FastTD3Env:
             upper_limits_20, dtype=torch.float32, device=device
         )
 
+        # ====================================================================
+        # Override PD gains and torque limits to match MuJoCo exactly
+        # (same overrides as eval_agent.py — without this, holosoma's
+        # defaults differ and cause ankle oscillation from torque clipping)
+        # ====================================================================
+        if use_direct_pd and hasattr(env, "p_gains") and hasattr(env, "d_gains"):
+            mujoco_stiffness = {
+                "Left_Shoulder_Pitch": 20.0, "Left_Shoulder_Roll": 20.0, "Left_Elbow_Pitch": 20.0, "Left_Elbow_Yaw": 20.0,
+                "Right_Shoulder_Pitch": 20.0, "Right_Shoulder_Roll": 20.0, "Right_Elbow_Pitch": 20.0, "Right_Elbow_Yaw": 20.0,
+                "Left_Hip_Pitch": 50.0, "Left_Hip_Roll": 50.0, "Left_Hip_Yaw": 50.0, "Left_Knee_Pitch": 50.0, "Left_Ankle_Pitch": 30.0, "Left_Ankle_Roll": 30.0,
+                "Right_Hip_Pitch": 50.0, "Right_Hip_Roll": 50.0, "Right_Hip_Yaw": 50.0, "Right_Knee_Pitch": 50.0, "Right_Ankle_Pitch": 30.0, "Right_Ankle_Roll": 30.0,
+            }
+            mujoco_damping = {
+                "Left_Shoulder_Pitch": 2.0, "Left_Shoulder_Roll": 2.0, "Left_Elbow_Pitch": 2.0, "Left_Elbow_Yaw": 2.0,
+                "Right_Shoulder_Pitch": 2.0, "Right_Shoulder_Roll": 2.0, "Right_Elbow_Pitch": 2.0, "Right_Elbow_Yaw": 2.0,
+                "Left_Hip_Pitch": 3.0, "Left_Hip_Roll": 3.0, "Left_Hip_Yaw": 3.0, "Left_Knee_Pitch": 3.0, "Left_Ankle_Pitch": 1.0, "Left_Ankle_Roll": 1.0,
+                "Right_Hip_Pitch": 3.0, "Right_Hip_Roll": 3.0, "Right_Hip_Yaw": 3.0, "Right_Knee_Pitch": 3.0, "Right_Ankle_Pitch": 1.0, "Right_Ankle_Roll": 1.0,
+            }
+            mujoco_torque_limits = {
+                "Left_Shoulder_Pitch": 18.0, "Left_Shoulder_Roll": 18.0, "Left_Elbow_Pitch": 18.0, "Left_Elbow_Yaw": 18.0,
+                "Right_Shoulder_Pitch": 18.0, "Right_Shoulder_Roll": 18.0, "Right_Elbow_Pitch": 18.0, "Right_Elbow_Yaw": 18.0,
+                "Left_Hip_Pitch": 45.0, "Left_Hip_Roll": 45.0, "Left_Hip_Yaw": 30.0, "Left_Knee_Pitch": 65.0,
+                "Left_Ankle_Pitch": 24.0, "Left_Ankle_Roll": 15.0,
+                "Right_Hip_Pitch": 45.0, "Right_Hip_Roll": 45.0, "Right_Hip_Yaw": 30.0, "Right_Knee_Pitch": 65.0,
+                "Right_Ankle_Pitch": 24.0, "Right_Ankle_Roll": 15.0,
+            }
+
+            # Lock non-policy joints
+            idx_non_policy = [i for i in range(env.num_dof) if i not in self._idx20.tolist()]
+            if env.p_gains.ndim == 1:
+                env.p_gains[idx_non_policy] = 200.0
+                env.d_gains[idx_non_policy] = 10.0
+            else:
+                env.p_gains[:, idx_non_policy] = 200.0
+                env.d_gains[:, idx_non_policy] = 10.0
+
+            # Set exact MuJoCo gains and torque limits for policy joints
+            for i, name in enumerate(FASTTD3_POLICY_DOF_NAMES_20):
+                idx = self._idx20[i]
+                if env.p_gains.ndim == 1:
+                    env.p_gains[idx] = mujoco_stiffness[name]
+                    env.d_gains[idx] = mujoco_damping[name]
+                else:
+                    env.p_gains[:, idx] = mujoco_stiffness[name]
+                    env.d_gains[:, idx] = mujoco_damping[name]
+                if hasattr(env, "torque_limits") and name in mujoco_torque_limits:
+                    env.torque_limits[idx] = mujoco_torque_limits[name]
+
+            print("Overrode PD gains and torque limits to match MuJoCo (same as eval_agent.py)")
+            # Print ankle torque limits for verification
+            for name in ["Left_Ankle_Pitch", "Left_Ankle_Roll", "Right_Ankle_Pitch", "Right_Ankle_Roll"]:
+                j = FASTTD3_POLICY_DOF_NAMES_20.index(name)
+                idx = self._idx20[j]
+                print(f"  {name}: kp={env.p_gains[idx] if env.p_gains.ndim == 1 else env.p_gains[0, idx]:.1f}, "
+                      f"kd={env.d_gains[idx] if env.d_gains.ndim == 1 else env.d_gains[0, idx]:.1f}, "
+                      f"torque_limit={env.torque_limits[idx]:.1f}")
+
         # Store default positions for all DOFs
         # Start with environment defaults for non-policy joints
         if hasattr(env, "default_dof_pos"):
